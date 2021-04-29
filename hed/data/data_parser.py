@@ -3,9 +3,40 @@ import sys
 import time
 import wget
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance
 from hed.utils.io import IO
+import random
 
+
+def random_flip_left_right(img, prob=0.3):
+    p = random.uniform(0.0, 1.0)
+    if p < prob:
+        img = img.transpose(Image.FLIP_LEFT_RIGHT)
+    return img
+
+def random_contrast(img, prob=0.3, lower = 0.2, upper = 1.8):
+    p = random.uniform(0.0, 1.0)
+    if p < prob:
+        factor = random.uniform(lower, upper)
+        img = ImageEnhance.Sharpness(img)
+        img = img.enhance(factor)
+    return img
+
+def random_brightness(img, prob=0.3, lower = 0.6, upper = 1.4):
+    p = random.uniform(0.0, 1.0)
+    if p < prob:
+        factor = random.uniform(lower, upper)
+        img = ImageEnhance.Brightness(img)
+        img = img.enhance(factor)
+    return img
+
+def random_color(img, prob=0.3, lower = 0.6, upper = 1.5):
+    p = random.uniform(0.0, 1.0)
+    if p < prob:
+        factor = random.uniform(lower, upper)
+        img = ImageEnhance.Color(img)
+        img = img.enhance(factor)
+    return img
 
 class DataParser():
 
@@ -21,7 +52,7 @@ class DataParser():
         self.io.print_info('Training data set-up from {}'.format(os.path.join(self.train_file)))
         self.n_samples = len(self.training_pairs)
 
-        self.all_ids = range(self.n_samples)
+        self.all_ids = list(range(self.n_samples))
         np.random.shuffle(self.all_ids)
 
         self.training_ids = self.all_ids[:int(self.cfgs['train_split'] * len(self.training_pairs))]
@@ -58,16 +89,23 @@ class DataParser():
             im = im.resize((self.cfgs['training']['image_width'], self.cfgs['training']['image_height']))
             em = em.resize((self.cfgs['training']['image_width'], self.cfgs['training']['image_height']))
 
+            # Image Augmentation
+            if np.random.random() < 0.3:
+                im = random_flip_left_right(im, prob=1.)
+                em = random_flip_left_right(im, prob=1.)
+            im = random_contrast(im, prob=0.3, lower=0.2, upper=1.8)
+            im = random_brightness(im, prob=0.3, lower=0.6, upper=1.4)
+            im = random_color(im, prob=0.3, lower=0.6, upper=1.5)
+
             im = np.array(im, dtype=np.float32)
             im = im[:, :, self.cfgs['channel_swap']]
             im -= self.cfgs['mean_pixel_value']
 
+            em = np.array(em.convert('L'), dtype=np.float32)
+
             # Labels needs to be 1 or 0 (edge pixel or not)
             # or can use regression targets as done by the author
             # https://github.com/s9xie/hed/blob/9e74dd710773d8d8a469ad905c76f4a7fa08f945/src/caffe/layers/image_labelmap_data_layer.cpp#L213
-
-            em = np.array(em.convert('L'), dtype=np.float32)
-
             if self.cfgs['target_regression']:
                 bin_em = em / 255.0
             else:

@@ -2,13 +2,14 @@ import os
 import sys
 import argparse
 import yaml
-import urlparse
+import urllib.parse
 import urllib
-import StringIO
-import cStringIO
+from io import StringIO
+from io import BytesIO
 import numpy as np
 from PIL import Image
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 from hed.models.vgg16 import Vgg16
 from hed.utils.io import IO
@@ -80,7 +81,8 @@ class HEDTester():
 
             em[em < self.cfgs['testing_threshold']] = 0.0
 
-            em = 255.0 * (1.0 - em)
+            #em = 255.0 * (1.0 - em)
+            em = 255.0 * em
             em = np.tile(em, [1, 1, 3])
 
             em = Image.fromarray(np.uint8(em))
@@ -91,22 +93,22 @@ class HEDTester():
         # is url
         image = None
 
-        if not urlparse.urlparse(test_image).scheme == "":
+        if not urllib.parse.urlparse(test_image).scheme == "":
 
             url_response = urllib.urlopen(test_image)
 
             if url_response.code == 404:
-                print self.io.print_error('[Testing] URL error code : {1} for {0}'.format(test_image, url_response.code))
+                print(self.io.print_error('[Testing] URL error code : {1} for {0}'.format(test_image, url_response.code)))
                 return None
 
             try:
 
-                image_buffer = cStringIO.StringIO(url_response.read())
+                image_buffer = StringIO(url_response.read())
                 image = self.capture_pixels(image_buffer)
 
             except Exception as err:
 
-                print self.io.print_error('[Testing] Error with URL {0} {1}'.format(test_image, err))
+                print(self.io.print_error('[Testing] Error with URL {0} {1}'.format(test_image, err)))
                 return None
 
         # read from disk
@@ -114,16 +116,16 @@ class HEDTester():
 
             try:
 
-                fid = open(test_image, 'r')
+                fid = open(test_image, 'rb')
                 stream = fid.read()
                 fid.close()
 
-                image_buffer = cStringIO.StringIO(stream)
+                image_buffer = BytesIO(stream)
                 image = self.capture_pixels(image_buffer)
 
             except Exception as err:
 
-                print self.io.print_error('[Testing] Error with image file {0} {1}'.format(test_image, err))
+                print(self.io.print_error('[Testing] Error with image file {0} {1}'.format(test_image, err)))
                 return None
 
         return image

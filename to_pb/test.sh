@@ -1,0 +1,1 @@
+python ../run-hed.py --reshape --config-file ../hed/configs/hed.yaml && python freeze_graph.py -c ~/nctu/hed/holy-edge/summary/20210429_01/reshape_models/hed-model-0 -o t && python evaluate_pb.py -c t.pb && feh result.jpg

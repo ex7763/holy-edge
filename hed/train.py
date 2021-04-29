@@ -2,7 +2,8 @@ import os
 import sys
 import yaml
 import argparse
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 from termcolor import colored
 
 from hed.models.vgg16 import Vgg16
@@ -51,17 +52,19 @@ class HEDTrainer():
 
         self.model.setup_training(session)
 
-        opt = tf.train.AdamOptimizer(self.cfgs['optimizer_params']['learning_rate'])
+        opt = tf.compat.v1.train.AdagradOptimizer(self.cfgs['optimizer_params']['learning_rate'])
         train = opt.minimize(self.model.loss)
+        # opt = tf.keras.optimizers.Adam(self.cfgs['optimizer_params']['learning_rate'])
+        # train = opt.minimize(self.model.loss, var_list=self.model)
 
-        session.run(tf.global_variables_initializer())
+        session.run(tf.compat.v1.global_variables_initializer())
 
         for idx in range(self.cfgs['max_iterations']):
 
             im, em, _ = train_data.get_training_batch()
 
-            run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-            run_metadata = tf.RunMetadata()
+            run_options = tf.compat.v1.RunOptions(trace_level=tf.compat.v1.RunOptions.FULL_TRACE)
+            run_metadata = tf.compat.v1.RunMetadata()
 
             _, summary, loss = session.run([train, self.model.merged_summary, self.model.loss],
                                            feed_dict={self.model.images: im, self.model.edgemaps: em},

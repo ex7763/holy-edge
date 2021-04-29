@@ -5,7 +5,8 @@ import inspect
 
 import numpy as np
 from termcolor import colored
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 from hed.losses import sigmoid_cross_entropy_balanced
 from hed.utils.io import IO
@@ -21,10 +22,10 @@ class Vgg16():
         base_path = os.path.abspath(os.path.dirname(__file__))
         weights_file = os.path.join(base_path, self.cfgs['model_weights_path'])
 
-        self.data_dict = np.load(weights_file, encoding='latin1').item()
+        self.data_dict = np.load(weights_file, encoding='latin1', allow_pickle=True).item()
         self.io.print_info("Model weights loaded from {}".format(self.cfgs['model_weights_path']))
 
-        self.images = tf.placeholder(tf.float32, [None, self.cfgs[run]['image_height'], self.cfgs[run]['image_width'], self.cfgs[run]['n_channels']])
+        self.images = tf.placeholder(tf.float32, [None, self.cfgs[run]['image_height'], self.cfgs[run]['image_width'], self.cfgs[run]['n_channels']], name="input")
         self.edgemaps = tf.placeholder(tf.float32, [None, self.cfgs[run]['image_height'], self.cfgs[run]['image_width'], 1])
 
         self.define_model()
@@ -76,11 +77,12 @@ class Vgg16():
         self.io.print_info('Added CONV-BLOCK-5+SIDE-5')
 
         self.side_outputs = [self.side_1, self.side_2, self.side_3, self.side_4, self.side_5]
+        #self.side_outputs = [self.side_1, self.side_2, self.side_3]
 
         w_shape = [1, 1, len(self.side_outputs), 1]
         self.fuse = self.conv_layer(tf.concat(self.side_outputs, axis=3),
                                     w_shape, name='fuse_1', use_bias=False,
-                                    w_init=tf.constant_initializer(0.2))
+                                    w_init=tf.keras.initializers.glorot_normal())
 
         self.io.print_info('Added FUSE layer')
 
@@ -149,13 +151,13 @@ class Vgg16():
             w_shape = [1, 1, in_shape[-1], 1]
 
             classifier = self.conv_layer(inputs, w_shape, b_shape=1,
-                                         w_init=tf.constant_initializer(),
-                                         b_init=tf.constant_initializer(),
+                                         w_init=tf.keras.initializers.glorot_normal(),
+                                         b_init=tf.keras.initializers.glorot_normal(),
                                          name=name + '_reduction')
 
             classifier = self.deconv_layer(classifier, upscale=upscale,
                                            name='{}_deconv_{}'.format(name, upscale),
-                                           w_init=tf.truncated_normal_initializer(stddev=0.1))
+                                           w_init=tf.keras.initializers.glorot_normal())
 
             return classifier
 
@@ -176,6 +178,18 @@ class Vgg16():
         return tf.Variable(init)
 
     def setup_testing(self, session):
+
+        """
+            Apply sigmoid non-linearity to side layer ouputs + fuse layer outputs for predictions
+        """
+
+        self.predictions = []
+
+        for idx, b in enumerate(self.outputs):
+            output = tf.nn.sigmoid(b, name='output_{}'.format(idx))
+            self.predictions.append(output)
+
+    def setup_reshaping(self, session):
 
         """
             Apply sigmoid non-linearity to side layer ouputs + fuse layer outputs for predictions
@@ -214,7 +228,8 @@ class Vgg16():
         self.predictions.append(fuse_output)
         self.loss += (self.cfgs['loss_weights'] * fuse_cost)
 
-        pred = tf.cast(tf.greater(fuse_output, 0.5), tf.int32, name='predictions')
+        #pred = tf.cast(tf.greater(fuse_output, 0.5), tf.int32, name='predictions')
+        pred = tf.cast(fuse_output, tf.int32, name='predictions')
         error = tf.cast(tf.not_equal(pred, tf.cast(self.edgemaps, tf.int32)), tf.float32)
         self.error = tf.reduce_mean(error, name='pixel_error')
 

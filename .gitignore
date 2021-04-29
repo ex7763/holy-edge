@@ -99,3 +99,12 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# Mac OSX
+.DS_Store
+
+# Model
+/results
+/summary
+*.pb
+vgg16.npy
